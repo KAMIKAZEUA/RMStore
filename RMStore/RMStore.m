@@ -286,7 +286,11 @@ typedef void (^RMStoreSuccessBlock)();
 + (NSURL*)receiptURL
 {
     // The general best practice of weak linking using the respondsToSelector: method cannot be used here. Prior to iOS 7, the method was implemented as private SPI, but that implementation called the doesNotRecognizeSelector: method.
-    NSAssert(floor(NSFoundationVersionNumber) > NSFoundationVersionNumber_iOS_6_1, @"appStoreReceiptURL not supported in this iOS version.");
+#if TARGET_OS_IPHONE
+    NSAssert(floor(NSFoundationVersionNumber) >= NSFoundationVersionNumber_iOS_7_0, @"appStoreReceiptURL not supported in this iOS version.");
+#elif TARGET_OS_MAC
+    NSAssert(floor(NSFoundationVersionNumber) >= NSFoundationVersionNumber10_7, @"appStoreReceiptURL not supported in this iOS version.");
+#endif
     NSURL *url = [[NSBundle mainBundle] appStoreReceiptURL];
     return url;
 }
@@ -420,6 +424,8 @@ typedef void (^RMStoreSuccessBlock)();
     [[NSNotificationCenter defaultCenter] postNotificationName:RMSKRestoreTransactionsFailed object:self userInfo:userInfo];
 }
 
+#if TARGET_OS_IPHONE
+
 - (void)paymentQueue:(SKPaymentQueue *)queue updatedDownloads:(NSArray *)downloads
 {
     for (SKDownload *download in downloads)
@@ -527,6 +533,8 @@ typedef void (^RMStoreSuccessBlock)();
     }
     return NO;
 }
+
+#endif //TARGET_OS_IPHONE
 
 #pragma mark Transaction State
 
@@ -722,12 +730,14 @@ typedef void (^RMStoreSuccessBlock)();
     _products[product.productIdentifier] = product;    
 }
 
+#if TARGET_OS_IPHONE
 - (void)postNotificationWithName:(NSString*)notificationName download:(SKDownload*)download userInfoExtras:(NSDictionary*)extras
 {
     NSMutableDictionary *mutableExtras = extras ? [NSMutableDictionary dictionaryWithDictionary:extras] : [NSMutableDictionary dictionary];
     mutableExtras[RMStoreNotificationStoreDownload] = download;
     [self postNotificationWithName:notificationName transaction:download.transaction userInfoExtras:mutableExtras];
 }
+#endif //TARGET_OS_IPHONE
 
 - (void)postNotificationWithName:(NSString*)notificationName transaction:(SKPaymentTransaction*)transaction userInfoExtras:(NSDictionary*)extras
 {
