@@ -378,28 +378,30 @@ typedef void (^RMStoreSuccessBlock)();
 
 - (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray *)transactions
 {
-    for (SKPaymentTransaction *transaction in transactions)
-    {
-        switch (transaction.transactionState)
+    dispatch_async(dispatch_get_main_queue(), ^{
+        for (SKPaymentTransaction *transaction in transactions)
         {
-            case SKPaymentTransactionStatePurchased:
-                [self didPurchaseTransaction:transaction queue:queue];
-                break;
-            case SKPaymentTransactionStateFailed:
-                [self didFailTransaction:transaction queue:queue error:transaction.error];
-                break;
-            case SKPaymentTransactionStateRestored:
-                [self didRestoreTransaction:transaction queue:queue];
-                break;
+            switch (transaction.transactionState)
+            {
+                case SKPaymentTransactionStatePurchased:
+                    [self didPurchaseTransaction:transaction queue:queue];
+                    break;
+                case SKPaymentTransactionStateFailed:
+                    [self didFailTransaction:transaction queue:queue error:transaction.error];
+                    break;
+                case SKPaymentTransactionStateRestored:
+                    [self didRestoreTransaction:transaction queue:queue];
+                    break;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-            case SKPaymentTransactionStateDeferred:
-                [self didDeferTransaction:transaction];
-                break;
+                case SKPaymentTransactionStateDeferred:
+                    [self didDeferTransaction:transaction];
+                    break;
 #endif
-            default:
-                break;
+                default:
+                    break;
+            }
         }
-    }
+    });
 }
 
 - (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue
