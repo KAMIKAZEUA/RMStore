@@ -378,7 +378,7 @@ typedef void (^RMStoreSuccessBlock)();
 
 - (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray *)transactions
 {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_block_t block = ^{
         for (SKPaymentTransaction *transaction in transactions)
         {
             switch (transaction.transactionState)
@@ -401,15 +401,27 @@ typedef void (^RMStoreSuccessBlock)();
                     break;
             }
         }
-    });
+    };
+    
+    if([NSThread isMainThread])
+        block();
+    else
+        dispatch_sync(dispatch_get_main_queue(), block);
 }
 
 - (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue
 {
     RMStoreLog(@"restore transactions finished");
-    _restoredCompletedTransactionsFinished = YES;
+    dispatch_block_t block = ^{
+        _restoredCompletedTransactionsFinished = YES;
     
-    [self notifyRestoreTransactionFinishedIfApplicableAfterTransaction:nil];
+        [self notifyRestoreTransactionFinishedIfApplicableAfterTransaction:nil];
+    };
+    
+    if([NSThread isMainThread])
+        block();
+    else
+        dispatch_sync(dispatch_get_main_queue(), block);
 }
 
 - (void)paymentQueue:(SKPaymentQueue *)queue restoreCompletedTransactionsFailedWithError:(NSError *)error
