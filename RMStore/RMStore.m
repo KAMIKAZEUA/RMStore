@@ -130,7 +130,9 @@ typedef void (^RMStoreSuccessBlock)();
 @end
 
 @implementation RMStore {
-    NSMutableDictionary *_addPaymentParameters; // HACK: We use a dictionary of product identifiers because the returned SKPayment is different from the one we add to the queue. Bad Apple.
+    NSMutableDictionary<NSString*, RMAddPaymentParameters*>* _addPaymentParameters; // HACK: We use a dictionary of product identifiers because the returned SKPayment is different from the one we add to the queue. Bad Apple.
+	NSMutableSet<NSString*>* _deferredProductIds; // [NAK]
+	
     NSMutableDictionary *_products;
     NSMutableSet *_productsRequestDelegates;
     
@@ -152,6 +154,7 @@ typedef void (^RMStoreSuccessBlock)();
     if (self = [super init])
     {
         _addPaymentParameters = [NSMutableDictionary dictionary];
+		_deferredProductIds = [NSMutableSet new];
         _products = [NSMutableDictionary dictionary];
         _productsRequestDelegates = [NSMutableSet set];
         _restoredTransactions = [NSMutableArray array];
@@ -182,6 +185,28 @@ typedef void (^RMStoreSuccessBlock)();
     return [SKPaymentQueue canMakePayments];
 }
 
+// [NAK]
+- (BOOL)isAddingPayment:(NSString*)productIdentifier
+{
+	return _addPaymentParameters[productIdentifier] != nil;
+}
+
+- (BOOL)isDeferredPayment:(NSString*)productIdentifier
+{
+	return [_deferredProductIds containsObject:productIdentifier];
+}
+
+- (BOOL)hasAddingPayment
+{
+	return _addPaymentParameters.count > 0;
+}
+
+- (BOOL)hasDeferredPayment
+{
+	return _deferredProductIds.count > 0;
+}
+// [NAK]
+
 - (void)addPayment:(NSString*)productIdentifier
 {
     [self addPayment:productIdentifier success:nil failure:nil];
@@ -199,6 +224,9 @@ typedef void (^RMStoreSuccessBlock)();
            success:(void (^)(SKPaymentTransaction *transaction))successBlock
            failure:(void (^)(SKPaymentTransaction *transaction, NSError *error))failureBlock
 {
+	if([self isAddingPayment:productIdentifier]) { // [NAK]
+		return; // [NAK]
+	}
     SKProduct *product = [self productForIdentifier:productIdentifier];
     if(product == nil) {
         if(self.downloadProductsIfNotAvailable) {
@@ -376,6 +404,22 @@ typedef void (^RMStoreSuccessBlock)();
 
 #pragma mark SKPaymentTransactionObserver
 
+/// ios 11 [NAK]
+- (BOOL)paymentQueue:(SKPaymentQueue *)queue shouldAddStorePayment:(SKPayment *)payment forProduct:(SKProduct *)product
+{
+	NSString* productIdentifier = product.productIdentifier;
+	if([self isAddingPayment:productIdentifier]) {
+		return NO; //
+	}
+	if(self.shouldAddStorePaymentSuccessHandler && self.shouldAddStorePaymentFailureHandler) {
+		RMAddPaymentParameters *parameters = [[RMAddPaymentParameters alloc] init];
+		parameters.successBlock = self.shouldAddStorePaymentSuccessHandler;
+		parameters.failureBlock = self.shouldAddStorePaymentFailureHandler;
+		_addPaymentParameters[productIdentifier] = parameters;
+		return YES;
+	}
+	return NO;
+}
 - (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray *)transactions
 {
     dispatch_block_t block = ^{
@@ -468,6 +512,11 @@ typedef void (^RMStoreSuccessBlock)();
                 break;
         }
     }
+}
+
+- (void)paymentQueue:(SKPaymentQueue *)queue removedTransactions:(NSArray <SKPaymentTransaction *> *)transactions
+{
+	RMStoreLog(@"removed transactions %@", transactions);
 }
 
 #pragma mark Download State
@@ -621,6 +670,10 @@ typedef void (^RMStoreSuccessBlock)();
 
 - (void)didDeferTransaction:(SKPaymentTransaction *)transaction
 {
+	NSString* productId = transaction.payment.productIdentifier;
+	if(productId) {
+		[_deferredProductIds addObject:productId];
+	}
     [self postNotificationWithName:RMSKPaymentTransactionDeferred transaction:transaction userInfoExtras:nil];
 }
 
@@ -705,6 +758,7 @@ typedef void (^RMStoreSuccessBlock)();
 {
     RMAddPaymentParameters *parameters = _addPaymentParameters[identifier];
     [_addPaymentParameters removeObjectForKey:identifier];
+	[_deferredProductIds removeObject:identifier];
     return parameters;
 }
 
