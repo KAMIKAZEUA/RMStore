@@ -441,6 +441,8 @@ typedef void (^RMStoreSuccessBlock)();
                     [self didDeferTransaction:transaction];
                     break;
 #endif
+                case SKPaymentTransactionStatePurchasing:
+                    break;
                 default:
                     break;
             }
